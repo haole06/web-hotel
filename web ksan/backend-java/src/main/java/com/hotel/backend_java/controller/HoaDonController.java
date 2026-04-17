@@ -126,10 +126,47 @@ public class HoaDonController {
     // 6. Báo cáo
     @GetMapping("/reportbill")
     public ResponseEntity<?> report() {
-        long totalHD = hoaDonRepository.count();
-        List<Map<String, Object>> doanhThuTheoPT = hoaDonRepository.thongKeDoanhThuTheoPTTT();
+        long tongSoHD = hoaDonRepository.count();
+
+        // Tính tổng doanh thu toàn bộ
+        Double tongDoanhThuNum = jdbcTemplate.queryForObject("SELECT SUM(TongTien) FROM hoadon", Double.class);
+        if (tongDoanhThuNum == null)
+            tongDoanhThuNum = 0.0;
+
+        // Tính chi tiết theo phương thức
+        Double tienMatNum = jdbcTemplate
+                .queryForObject("SELECT SUM(TongTien) FROM hoadon WHERE PhuongThucTT = 'Tiền mặt'", Double.class);
+        Double chuyenKhoanNum = jdbcTemplate
+                .queryForObject("SELECT SUM(TongTien) FROM hoadon WHERE PhuongThucTT = 'Chuyển khoản'", Double.class);
+
+        // Tìm hóa đơn lớn nhất
+        List<Map<String, Object>> maxHDList = jdbcTemplate
+                .queryForList("SELECT MaHD, TongTien FROM hoadon ORDER BY TongTien DESC LIMIT 1");
+
+        // --- BẮT ĐẦU ĐỊNH DẠNG SỐ SANG CHUỖI CÓ DẤU CHẤM ---
+        java.text.DecimalFormat df = new java.text.DecimalFormat("#,###"); // Định dạng số 1000 -> 1.000
+        df.setDecimalFormatSymbols(new java.text.DecimalFormatSymbols(java.util.Locale.GERMAN)); // Dùng chuẩn Đức để
+                                                                                                 // xài dấu chấm phân
+                                                                                                 // cách
+
+        String tongDoanhThu = df.format(tongDoanhThuNum);
+        String tienMat = df.format(tienMatNum != null ? tienMatNum : 0);
+        String chuyenKhoan = df.format(chuyenKhoanNum != null ? chuyenKhoanNum : 0);
+
+        Map<String, Object> hoaDonMax = new java.util.HashMap<>();
+        if (!maxHDList.isEmpty()) {
+            hoaDonMax.put("MaHD", maxHDList.get(0).get("MaHD"));
+            hoaDonMax.put("TongTien", df.format(maxHDList.get(0).get("TongTien")));
+        }
+        // ----------------------------------------------------
+
+        // Gửi trả đúng y chang format của Node.js
         return ResponseEntity.ok(Map.of(
-                "Tổng số hóa đơn", totalHD,
-                "Doanh thu chi tiết", doanhThuTheoPT));
+                "Tổng số hóa đơn", tongSoHD,
+                "Tổng doanh thu", tongDoanhThu, // Đã biến thành chữ có dấu chấm!
+                "Doanh thu theo phương thức", Map.of(
+                        "tienMat", tienMat,
+                        "chuyenKhoan", chuyenKhoan),
+                "Hóa đơn cao nhất", hoaDonMax));
     }
 }

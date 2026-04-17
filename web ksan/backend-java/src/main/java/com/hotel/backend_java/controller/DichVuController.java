@@ -4,6 +4,7 @@ import com.hotel.backend_java.entity.DichVu;
 import com.hotel.backend_java.repository.DichVuRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,6 +18,8 @@ public class DichVuController {
 
     @Autowired
     private DichVuRepository dichVuRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     // 1. Quản lý danh sách dịch vụ
     @GetMapping("/managementservices")
@@ -57,11 +60,31 @@ public class DichVuController {
 
     // 5. Báo cáo dịch vụ (Tạm thời trả về dữ liệu ảo chờ xây xong bảng sudungdv)
     @GetMapping("/reportservice")
-    public ResponseEntity<?> baoCaoDichVu() {
-        long total = dichVuRepository.count();
+    public ResponseEntity<?> report() {
+        // Lấy tổng số lượng dịch vụ đang có trong menu
+        Long total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM dichvu", Long.class);
+        if (total == null)
+            total = 0L;
+
+        // Dịch vụ dùng NHIỀU nhất (Giống hệt SQL của Node.js: MaDV, TenDV, TongSD)
+        String sqlMax = "SELECT dv.MaDV, dv.TenDV, SUM(sd.SoLuong) AS TongSD " +
+                "FROM dichvu dv JOIN sudungdv sd ON dv.MaDV = sd.MaDV " +
+                "GROUP BY dv.MaDV, dv.TenDV " +
+                "ORDER BY TongSD DESC LIMIT 1";
+        List<Map<String, Object>> maxList = jdbcTemplate.queryForList(sqlMax);
+        Object maxDV = maxList.isEmpty() ? "Chưa có dữ liệu" : maxList.get(0);
+
+        // Dịch vụ dùng ÍT nhất
+        String sqlMin = "SELECT dv.MaDV, dv.TenDV, SUM(sd.SoLuong) AS TongSD " +
+                "FROM dichvu dv JOIN sudungdv sd ON dv.MaDV = sd.MaDV " +
+                "GROUP BY dv.MaDV, dv.TenDV " +
+                "ORDER BY TongSD ASC LIMIT 1";
+        List<Map<String, Object>> minList = jdbcTemplate.queryForList(sqlMin);
+        Object minDV = minList.isEmpty() ? "Chưa có dữ liệu" : minList.get(0);
+
         return ResponseEntity.ok(Map.of(
                 "Tổng số dịch vụ", total,
-                "Dịch vụ dùng nhiều nhất", Map.of("MaDV", "Đang cập nhật", "TenDV", "Chờ bảng sudungdv", "TongSD", 0),
-                "Dịch vụ dùng ít nhất", Map.of("MaDV", "Đang cập nhật", "TenDV", "Chờ bảng sudungdv", "TongSD", 0)));
+                "Dịch vụ dùng nhiều nhất", maxDV,
+                "Dịch vụ dùng ít nhất", minDV));
     }
 }
