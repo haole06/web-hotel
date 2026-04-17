@@ -50,6 +50,7 @@ public class Users {
         return role;
     }
 
+    // thử
     public void setRole(String role) {
         this.role = role;
     }
